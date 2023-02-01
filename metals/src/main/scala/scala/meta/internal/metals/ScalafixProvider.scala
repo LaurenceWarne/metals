@@ -47,6 +47,7 @@ case class ScalafixProvider(
     interactive: InteractiveSemanticdbs,
 )(implicit ec: ExecutionContext) {
   import ScalafixProvider._
+
   private val scalafixCache = TrieMap.empty[ScalaBinaryVersion, Scalafix]
   private val rulesClassloaderCache =
     TrieMap.empty[ScalafixRulesClasspathKey, URLClassLoader]
@@ -298,7 +299,7 @@ case class ScalafixProvider(
     }
   }
 
-  private def rulesFromScalafixConf(): Set[String] = {
+  def rulesFromScalafixConf(): Set[String] = {
     scalafixConf(isScala3 = false) match {
       case None => Set.empty
       case Some(configPath) =>
@@ -327,7 +328,7 @@ case class ScalafixProvider(
    * unsaved. This however requires us to save both the file and semanticdb.
    * @return
    */
-  private def scalafixEvaluate(
+  def scalafixEvaluate(
       file: AbsolutePath,
       scalaTarget: ScalaTarget,
       inBuffers: String,

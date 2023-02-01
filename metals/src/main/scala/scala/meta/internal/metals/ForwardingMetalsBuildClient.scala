@@ -28,6 +28,10 @@ import ch.epfl.scala.{bsp4j => b}
 import com.google.gson.JsonObject
 import org.eclipse.lsp4j.jsonrpc.services.JsonNotification
 import org.eclipse.{lsp4j => l}
+import scala.meta.internal.metals.ScalafixDiagnosticsProvider
+import scala.concurrent.ExecutionContext
+import scala.util.Success
+import scala.meta.internal.metals.Buffers
 
 /**
  * A build client that forwards notifications from the build server to the language client.
@@ -36,6 +40,7 @@ final class ForwardingMetalsBuildClient(
     languageClient: MetalsLanguageClient,
     diagnostics: Diagnostics,
     buildTargets: BuildTargets,
+    buffers: Buffers,
     clientConfig: ClientConfiguration,
     statusBar: StatusBar,
     time: Time,
@@ -43,7 +48,9 @@ final class ForwardingMetalsBuildClient(
     onBuildTargetDidCompile: BuildTargetIdentifier => Unit,
     onBuildTargetDidChangeFunc: b.DidChangeBuildTarget => Unit,
     bspErrorHandler: BspErrorHandler,
-) extends MetalsBuildClient
+    scalafixDiagnosticsProvider: ScalafixDiagnosticsProvider,
+)(implicit ec: ExecutionContext)
+    extends MetalsBuildClient
     with Cancelable {
 
   private case class Compilation(
@@ -135,7 +142,6 @@ final class ForwardingMetalsBuildClient(
           diagnostics.onStartCompileBuildTarget(target)
           // cancel ongoing compilation for the current target, if any.
           compilations.remove(target).foreach(_.promise.cancel())
-
           val name = info.getDisplayName
           val promise = Promise[CompileReport]()
           val isNoOp =
@@ -171,12 +177,13 @@ final class ForwardingMetalsBuildClient(
             case NonFatal(e) =>
               scribe.error(s"failed to process compile report", e)
           }
-          val target = report.getTarget
           compilation.promise.trySuccess(report)
           val name = buildTargets.info(report.getTarget) match {
             case Some(i) => i.getDisplayName
             case None => report.getTarget.getUri
           }
+          val target = report.getTarget
+          publishExternalDiagnostics(target, name)
           val isSuccess = report.getErrors == 0
           val icon =
             if (isSuccess) clientConfig.icons.check
@@ -257,4 +264,34 @@ final class ForwardingMetalsBuildClient(
       override def size = compilations.size
       override def buildTargets = compilations.keysIterator
     }
+
+  private def publishExternalDiagnostics(
+      target: BuildTargetIdentifier,
+      name: String,
+  ): Unit = {
+    val targetSources =
+      buildTargets.buildTargetSources(target).filter(buffers.contains).toSet
+    diagnostics.resetDiagnostics { case (path, diag) =>
+      diag.getSource() == scalafixDiagnosticsProvider.source &&
+      targetSources.contains(path)
+    }
+    val timer = new Timer(Time.system)
+    scalafixDiagnosticsProvider
+      .diagnostics(targetSources)
+      .withTimeout(5, ju.concurrent.TimeUnit.SECONDS)
+      .onComplete { case Success(diagnosticsMap) =>
+        val time = timer.elapsedMillis
+        val totalDiagnostics = diagnosticsMap.map(_._2.length).sum
+        scribe.info(
+          s"Scalafix took ${time}ms for ${name} finding $totalDiagnostics diagnostics"
+        )
+        languageClient.showMessage(
+          org.eclipse.lsp4j.MessageType.Info,
+          s"Scalafix took ${time}ms for ${name} finding $totalDiagnostics diagnostics",
+        )
+        diagnosticsMap.foreach { case (path, fileDiagnostics) =>
+          diagnostics.onPublishDiagnostics(path, fileDiagnostics, false, true)
+        }
+      }
+  }
 }

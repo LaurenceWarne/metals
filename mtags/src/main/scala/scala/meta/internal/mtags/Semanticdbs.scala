@@ -13,6 +13,7 @@ import scala.meta.internal.semanticdb.Scala._
 import scala.meta.internal.semanticdb.XtensionSemanticdbSymbolInformation
 import scala.meta.internal.{semanticdb => s}
 import scala.meta.io.RelativePath
+import scala.util.control.NonFatal
 
 trait Semanticdbs {
   def textDocument(path: AbsolutePath): TextDocumentLookup
@@ -23,6 +24,24 @@ object Semanticdbs {
     try s.TextDocuments.parseFrom(in)
     finally in.close()
   }
+
+  def publicFoo: Int = List(3, 1, 2, 3).filter(_ > 3).max
+
+  println(List(1, 2, 3).sortBy(-_).headOption)
+
+  val x: Option[Int] = if (4 > 3) Some(43) else None
+
+  implicit class XtensionVal(val str: String) extends AnyVal {
+    def doubled: String = str + str
+  }
+
+  def foobar: Unit =
+    try {
+      val y = 3
+      println(y)
+    } catch {
+      case _: Throwable => println("hi")
+    }
 
   def loadTextDocument(
       scalaOrJavaPath: AbsolutePath,

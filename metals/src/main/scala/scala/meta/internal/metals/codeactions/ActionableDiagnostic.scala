@@ -44,7 +44,6 @@ class ActionableDiagnostic() extends CodeAction {
             diagnostics = List(diagnostic),
           )
       }
-
     }
 
     val codeActions = params

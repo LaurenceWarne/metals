@@ -55,6 +55,7 @@ case class UserConfiguration(
     scalafixRulesDependencies: List[String] = Nil,
     customProjectRoot: Option[String] = None,
     scalaCliLauncher: Option[String] = None,
+    showScalafixDiagnostics: Boolean = true,
 ) {
 
   def currentBloopVersion: String =

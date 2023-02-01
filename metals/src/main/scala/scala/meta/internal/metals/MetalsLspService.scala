@@ -337,6 +337,15 @@ class MetalsLspService(
     trees,
   )
 
+  private val scalafixDiagnosticsProvider = new ScalafixDiagnosticsProvider(
+    buffers,
+    () => scalafixProvider,
+    buildTargets,
+    trees,
+    diagnostics,
+    () => userConfig,
+  )
+
   private val warnings: Warnings = new Warnings(
     folder,
     buildTargets,
@@ -395,6 +404,7 @@ class MetalsLspService(
       languageClient,
       diagnostics,
       buildTargets,
+      buffers,
       clientConfig,
       statusBar,
       time,
@@ -415,7 +425,8 @@ class MetalsLspService(
       onBuildTargetDidChangeFunc = params => {
         onBuildTargetChanges(params)
       },
-      bspErrorHandler,
+      bspErrorHandler = bspErrorHandler,
+      scalafixDiagnosticsProvider = scalafixDiagnosticsProvider,
     )
 
   private val bloopServers: BloopServers = new BloopServers(

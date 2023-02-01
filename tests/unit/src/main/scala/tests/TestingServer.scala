@@ -650,6 +650,8 @@ final case class TestingServer(
     fullServer.executeCommand(new ExecuteCommandParams(command, args)).asScala
   }
 
+  def waitForCompile(): Future[Unit] = waitFor(2500)
+
   def waitFor(millis: Long): Future[Unit] = Future { Thread.sleep(millis) }
 
   def startDebugging(

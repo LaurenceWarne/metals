@@ -62,6 +62,11 @@ final class Diagnostics(
   private val compilationStatus =
     TrieMap.empty[BuildTargetIdentifier, CompilationStatus]
 
+  def addExternalDiagnostics(
+      path: AbsolutePath,
+      diagnostics: List[l.Diagnostic],
+  ) = ???
+
   def reset(): Unit = {
     val keys = diagnostics.keys
     diagnostics.clear()
@@ -79,6 +84,15 @@ final class Diagnostics(
       diagnostics.remove(key)
       publishDiagnostics(key)
     }
+
+  def resetDiagnostics(
+      predicate: (AbsolutePath, l.Diagnostic) => Boolean
+  ): Unit =
+    for {
+      (path, queue) <- diagnostics.iterator
+      diagnostic <- queue.asScala
+      if (predicate(path, diagnostic))
+    } queue.remove(diagnostic)
 
   def onStartCompileBuildTarget(target: BuildTargetIdentifier): Unit = {
     if (statistics.isDiagnostics) {
@@ -152,6 +166,7 @@ final class Diagnostics(
       path: AbsolutePath,
       diagnostics: Seq[Diagnostic],
       isReset: Boolean,
+      forcePublish: Boolean = false,
   ): Unit = {
     val isSamePathAsLastDiagnostic = path == lastPublished.get()
     lastPublished.set(path)
@@ -167,7 +182,6 @@ final class Diagnostics(
       snapshots(path) = path.toInput
     }
     diagnostics.foreach { diagnostic => queue.add(diagnostic) }
-
     // NOTE(olafur): we buffer up several diagnostics for the same path before forwarding
     // them to the editor client. Without buffering, we risk publishing an exponential number
     // notifications for a file with N number of diagnostics:
@@ -175,7 +189,7 @@ final class Diagnostics(
     // Notification 2: [1, 2]
     // Notification 3: [1, 2, 3]
     // Notification N: [1, ..., N]
-    if (isReset || !isSamePathAsLastDiagnostic) {
+    if (isReset || !isSamePathAsLastDiagnostic || forcePublish) {
       publishDiagnosticsBuffer()
       publishDiagnostics(path, queue)
     } else {
@@ -243,7 +257,9 @@ final class Diagnostics(
   }
 
   private def publishDiagnosticsBuffer(): Unit = {
-    clearDiagnosticsBuffer().foreach { path => publishDiagnostics(path) }
+    clearDiagnosticsBuffer().foreach { path =>
+      publishDiagnostics(path)
+    }
   }
 
   // Adjust positions for type errors for changes in the open buffer.
