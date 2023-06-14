@@ -20,6 +20,7 @@ import org.eclipse.lsp4j.Diagnostic
 import org.eclipse.lsp4j.PublishDiagnosticsParams
 import org.eclipse.lsp4j.services.LanguageClient
 import org.eclipse.{lsp4j => l}
+import JsonParser._
 
 private final case class CompilationStatus(
     code: bsp4j.StatusCode,
@@ -263,7 +264,7 @@ final class Diagnostics(
     val result = edit
       .toRevised(
         range = d.getRange,
-        adjustWithinToken = d.getSource() == "scala-cli",
+        adjustWithinToken = shouldAdjustWithinToken(d),
       )
       .map { range =>
         val ld = new l.Diagnostic(
@@ -281,7 +282,8 @@ final class Diagnostics(
             .isLeft() && d.getCode().getLeft() != "-1"
         )
           ld.setCode(d.getCode())
-        ld.setData(d.getData)
+
+        ld.setData(adjustDiagnosticData(d, edit))
         ld
       }
     if (result.isEmpty) {
@@ -306,4 +308,24 @@ final class Diagnostics(
     toPublish
   }
 
+  private def adjustDiagnosticData(
+      diagnostic: l.Diagnostic,
+      edit: TokenEditDistance,
+  ): Object =
+    diagnostic match {
+      case ScalacDiagnostic.ScalaDiagnostic(Left(textEdit)) =>
+        val range = textEdit.getRange
+        val revisedRange = edit
+          .toRevised(
+            range = range,
+            adjustWithinToken = shouldAdjustWithinToken(diagnostic),
+          )
+        textEdit.setRange(revisedRange.getOrElse(range))
+        textEdit.toJsonObject
+      // TODO also update bsp scala diagnostics, e.g. ScalaDiagnostic(Right(textEdits))
+      case diagnostic => diagnostic.getData
+    }
+
+  private def shouldAdjustWithinToken(diagnostic: l.Diagnostic): Boolean =
+    diagnostic.getSource() == "scala-cli"
 }
