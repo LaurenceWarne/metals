@@ -20,6 +20,7 @@ abstract class BaseCodeActionLspSuite(
   def checkNoAction(
       name: TestOptions,
       input: String,
+      expectNoDiagnostics: Boolean = true,
       scalafixConf: String = "",
       scalacOptions: List[String] = Nil,
       fileName: String = "A.scala",
@@ -27,14 +28,15 @@ abstract class BaseCodeActionLspSuite(
   )(implicit loc: Location): Unit = {
     val fileContent = input.replace("<<", "").replace(">>", "")
     check(
-      name,
-      input,
-      "",
-      fileContent,
+      name = name,
+      input = input,
+      expectedActions = "",
+      expectedCode = fileContent,
       scalafixConf = scalafixConf,
       scalacOptions = scalacOptions,
       fileName = fileName,
       filterAction = filterAction,
+      expectNoDiagnostics = expectNoDiagnostics,
     )
   }
 
